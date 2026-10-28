@@ -11,18 +11,24 @@
 # Install:
 #   python -m venv venv
 #   source venv/bin/activate          # Windows: venv\Scripts\activate
-#   pip install -r requirements.txt
+#   pip install --no-deps -r requirements.txt
 #
 # This file is a full lock: transitive dependencies are pinned too, so that the
 # environment is reproducible. Versions match the previous conda environment
 # except where noted with "CHANGED".
+#
+# Why --no-deps: pandera 0.13.4 on PyPI declares pandas>=1.2.0, but the code
+# requires pandas 1.1.4 (with 1.2.x, 30 of 281 tests fail on FloatingArray/pd.NA
+# behaviour changes). conda-forge's pandera build allowed this pair; --no-deps
+# installs exactly the pins below without pip enforcing pandera's metadata.
+# Because of this, `pip check` reports one expected warning:
+#   pandera 0.13.4 has requirement pandas>=1.2.0, but you have pandas 1.1.4.
 
 # === Application ============================================================
 
 # --- Data processing --------------------------------------------------------
-# CHANGED: was 1.1.4. pandera 0.13.4 on PyPI requires pandas>=1.2.0
-# (conda-forge's build of pandera allowed 1.1.4).
-pandas==1.2.5
+# Must stay at 1.1.4 - see "Why --no-deps" above.
+pandas==1.1.4
 numpy==1.19.4
 pandera==0.13.4
 pydantic==1.8.2
