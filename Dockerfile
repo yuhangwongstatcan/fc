@@ -2,13 +2,17 @@
 # - S3PROXY_ACCESS_KEY: changeme
 # - S3PROXY_SECRET_KEY: changeme
 
-# Base image for both stages. A standard venv does not bundle the Python
-# interpreter (unlike conda-pack), so the runtime stage must use the same image
-# as the build stage.
-# Outside the StatCan network, tag the Docker Hub equivalent with this name first:
-#   docker pull python:3.9.23-slim
-#   docker tag python:3.9.23-slim artifactory.cloud.statcan.ca/docker/python:3.9.23-slim
-FROM artifactory.cloud.statcan.ca/docker/python:3.9.23-slim AS base_image
+# Base image for both stages: the same Ubuntu release as the previous conda-based
+# runtime, with Python 3.9 installed from Ubuntu's own repositories.
+# A standard venv does not bundle the Python interpreter (unlike conda-pack), so
+# the build and runtime stages must share this base.
+FROM ubuntu:20.04 AS base_image
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.9=3.9.5-3ubuntu0~20.04.1 \
+        python3.9-venv=3.9.5-3ubuntu0~20.04.1 \
+    && rm -rf /var/lib/apt/lists/*
 
 FROM base_image AS builder
 ARG APP_HOME=/home/jovyan
@@ -17,9 +21,12 @@ ARG APP_HOME=/home/jovyan
 # `source /home/jovyan/src/venv/bin/activate`.
 WORKDIR ${APP_HOME}/src
 COPY src/requirements.txt .
+# Ubuntu's venv bundles pip 20.0.2, which does not recognise newer wheel tags,
+# so upgrade it first.
 # --no-deps: requirements.txt is a full lock (every transitive dependency is
 # pinned). See the header of requirements.txt for why this is required.
-RUN python -m venv venv \
+RUN python3.9 -m venv venv \
+    && venv/bin/pip install --no-cache-dir pip==23.0.1 \
     && venv/bin/pip install --no-cache-dir --no-deps -r requirements.txt
 
 FROM base_image AS runtime
