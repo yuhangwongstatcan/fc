@@ -1,0 +1,161 @@
+include:
+  - project: cloudnative/gitlab/gitlabci/kaniko-image-ci
+    ref: v1.X
+    file: ".kaniko.gitlab-ci.base.yml"
+
+# Documentation: https://gitlab.k8s.cloud.statcan.ca/cloudnative/gitlab/gitlabci/kaniko-image-ci
+# Support: https://gitlab.k8s.cloud.statcan.ca/cloudnative/gitlab/gitlabci/kaniko-image-ci#contribution-and-support
+
+# Global variables
+variables:
+  # IMAGE_REGISTRY_USER: <set these in your CI/CD variables>
+  # IMAGE_REGISTRY_PASS: <set these in your CI/CD variables>
+  IMAGE_REPOSITORY: artifactory.cloud.statcan.ca/docker/tourism-tourisme/frontier-counts
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  DOCKERFILE: Dockerfile
+  # Some third party python dependencies have a settings.py file in their folder
+  # under site-packages of the virtual environment. This throws an erroneous
+  # warning - Dockle thinks this filename may contain sensitive credentials.
+  DOCKLE_OPTIONS: -af settings.py -i DKL-DI-0005
+  TRIVY_OPTIONS: --exit-code 1 --severity CRITICAL # Only fail trivy scan on critical CVE
+  HADOLINT_IGNORE: --ignore DL3026
+
+stages:
+  #- lint
+  - version
+  - build
+  - scan
+  - push
+  - automated-tests
+  - tag
+  - docs
+  # - Linting
+
+create image tag:
+  stage: version
+  extends: .kaniko.createImageTag
+  only:
+    - merge_requests
+    - dev
+    - tags
+
+build image:
+  stage: build
+  extends: .kaniko.buildImage
+  dependencies:
+    - create image tag
+  only:
+    #  - main
+    #  - master
+    - dev
+    - tags
+    - merge_requests
+
+dockle:
+  stage: scan
+  extends: .kaniko.dockle
+  dependencies:
+    - build image
+  only:
+    #  - main
+    #  - master
+    - dev
+    - tags
+    - merge_requests
+
+hadolint:
+  stage: scan
+  extends: .kaniko.hadolint
+  only:
+    #  - main
+    #  - master
+    - dev
+    - tags
+    - merge_requests
+
+trivy:
+  stage: scan
+  extends: .kaniko.trivy
+  dependencies:
+    - build image
+  only:
+    #  - main
+    #  - master
+    - dev
+    - tags
+    - merge_requests
+
+push image:
+  stage: push
+  extends: .kaniko.pushImage
+  dependencies:
+    - build image
+    - create image tag
+  only:
+    - dev
+    - tags
+    - merge_requests
+  #  - main
+  #  - master
+
+# Run unit tests using the image built in the previous stage
+unit test:
+  stage: automated-tests
+  image: $IMAGE_REPOSITORY:$IMAGE_TAG
+  script:
+    # Activate the python virtual environment
+    - source /home/jovyan/src/.venv/bin/activate
+    # Make sure the test suite is running in the src folder from the fc image
+    - cd /home/jovyan/src
+    - export FC_USE_MOCK_MINIO=1
+    - pytest -k unit .
+  only:
+    # - main
+    # - master
+    - dev
+    - tags
+    - merge_requests
+
+# Run unit tests using the image built in the previous stage
+integration test:
+  stage: automated-tests
+  image: $IMAGE_REPOSITORY:$IMAGE_TAG
+  script:
+    # Activate the python virtual environment
+    - source /home/jovyan/src/.venv/bin/activate
+    # Make sure the test suite is running in the src folder from the fc image
+    - cd /home/jovyan/src
+    - export FC_USE_MOCK_MINIO=1
+    - pytest -k integration .
+  only:
+    # - main
+    # - master
+    - dev
+    - tags
+    - merge_requests
+
+pages:
+  stage: docs
+  image: python:3.14-slim
+  script:
+    # Install the pinned mkdocs toolchain (verified on Python 3.14)
+    - pip install --no-cache-dir -r $CI_PROJECT_DIR/src/requirements/docs.txt
+    # Make sure docs site build runs from project root in fc image
+    - cd $CI_PROJECT_DIR/src
+    # Make sure the environment variables are assigned so
+    # pydantic doesn't throw an error.
+    - export $(grep -v '^#' default.env | xargs echo)
+    # Need to manually override the default value of the service account JWT
+    # path - the default path may not exist on the filesystem of the process
+    # running the CI job. The token listed below is a fake token created so that
+    # pydantic won't throw an error due to invalid file path.
+    - export WEBAPP_SERVICE_ACCOUNT_JWT=config/token
+    # Build docs site and move to public directory
+    - python -m mkdocs build -f ../mkdocs.yml
+    - mv ../site/* $CI_PROJECT_DIR/public
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
+    - merge_requests
