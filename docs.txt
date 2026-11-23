@@ -1,0 +1,18 @@
+# Pinned dependencies for the MkDocs documentation build (the `pages` job in
+# .gitlab-ci.yml), translated 1:1 from the versions the job previously
+# installed via Conda. See docs/deployment/conda_migration_assessment.md.
+Pygments==2.19.2
+Markdown==3.3
+mkdocs==1.4.3
+mkdocs-autorefs==1.2.0
+mkdocs-macros-plugin==1.0.1
+mkdocs-markdownextradata-plugin==0.2.5
+mkdocs-material==9.1.17
+mkdocs-material-extensions==1.1.1
+mkdocs-table-reader-plugin==2.0.1
+pymdown-extensions==9.9.1
+mkdocstrings==0.22.0
+griffe==0.32.3
+mkdocstrings-python==1.1.2
+Jinja2==3.1.2
+livereload==2.6.3
