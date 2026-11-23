@@ -40,15 +40,13 @@ plugins:
         - mkdocstrings:
                   handlers:
                           python:
-                                  rendering:
+                                  # Resolved relative to this file (project root).
+                                  paths: [src]
+                                  options:
                                           show_source: True
                                           show_root_heading: True
                                           show_signature_annotations: True
                                           show_category_heading: True
-                                          replace_admonitions: no
-                                  setup_commands:
-                                          - import sys
-                                          - sys.path.insert(0, "src")
 
 nav:
         - Getting Started:
